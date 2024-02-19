@@ -1,0 +1,51 @@
+name: Update README Build Badge
+
+on:
+  push:
+    branches:
+      - [![Netlify Status](https://api.netlify.com/api/v1/badges/f5eca6ef-cfb6-4ac4-9673-50696f95772d/deploy-status)](https://app.netlify.com/sites/tourmaline-fudge-ee5307/deploys)]
+
+jobs:
+  update-readme-badge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Get latest commit hash
+        id: get_latest_commit
+        run: |
+          echo "latest_commit=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Generate status badge URL
+        id: generate_badge_url
+        run: |
+          echo "badge_url=https://github.com/${{ github.repository }}/commits/${{ steps.get_latest_commit.outputs.latest_commit }}/status.svg" >> $GITHUB_OUTPUT
+
+      - name: Replace README.md build badge
+        uses: actions/github-script@v5
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { data: { content } } = await github.rest.repos.getContent({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              path: 'README.md',
+              ref: 'main'
+            })
+            const readme = Buffer.from(content, 'base64').toString()
+            const badgeUrl = `${{ steps.generate_badge_url.outputs.badge_url }}`
+            const newReadme = readme.replace(
+              /!\[example branch parameter\]\(https:\/\/github.com\/github\/docs\/actions\/workflows\/main.yml\/badge\.svg\?branch=main\)/g,
+              `![example branch parameter](${badgeUrl})`
+            )
+            await github.rest.repos.updateFile({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              path: 'README.md',
+              message: 'Update build badge',
+              content: Buffer.from(newReadme).toString('base64'),
+              sha: context.ref
+            })
